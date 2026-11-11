@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dr. Dumke Practice Management System</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- jsPDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-900">
+
+    <!-- Header -->
+    <header class="bg-slate-900 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold tracking-tight">Dr. DUMKE Practice Management System</h1>
+                <p class="text-xs text-slate-400 mt-0.5">HPCSA Compliant Clinical Associate & Supervision Portal</p>
+            </div>
+            <div id="auth-container" class="mt-3 sm:mt-0 flex items-center gap-3">
+                <!-- Dynamically injected auth/session info -->
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        
+        <!-- Queue Navigation Tabs -->
+        <div class="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-3">
+            <button onclick="switchTab('SICK_NOTE')" id="tab-SICK_NOTE" class="px-4 py-2 font-medium text-sm rounded-lg bg-emerald-600 text-white transition shadow-sm">
+                Sick Notes Queue (<span id="count-SICK_NOTE">0</span>)
+            </button>
+            <button onclick="switchTab('SCRIPT')" id="tab-SCRIPT" class="px-4 py-2 font-medium text-sm rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition">
+                Scripts Queue (<span id="count-SCRIPT">0</span>)
+            </button>
+            <button onclick="switchTab('REFERRAL')" id="tab-REFERRAL" class="px-4 py-2 font-medium text-sm rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition">
+                Referrals Queue (<span id="count-REFERRAL">0</span>)
+            </button>
+        </div>
+
+        <!-- Dashboard Controls -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-2">
+                <button onclick="switchStatus('PENDING')" id="status-PENDING" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-100 text-amber-800 border border-amber-200 transition">
+                    ⏳ Pending Review
+                </button>
+                <button onclick="switchStatus('APPROVED')" id="status-APPROVED" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-slate-100 text-slate-600 border border-slate-200 transition">
+                    ✅ Approved & Signed
+                </button>
+            </div>
+            <button onclick="loadQueue()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-slate-800 text-white hover:bg-slate-700 transition shadow-sm">
+                🔄 Refresh Queue
+            </button>
+        </div>
+
+        <!-- Queue Items Table -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 text-xs uppercase tracking-wider border-b border-slate-200">
+                            <th class="py-3 px-4 font-semibold">Time Received</th>
+                            <th class="py-3 px-4 font-semibold">Patient Name & ID</th>
+                            <th class="py-3 px-4 font-semibold">Diagnosis / ICD-10</th>
+                            <th class="py-3 px-4 font-semibold">Specific Details</th>
+                            <th class="py-3 px-4 font-semibold text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="queue-table-body" class="divide-y divide-slate-100 text-sm">
+                        <!-- Dynamically populated rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-100">
+            <h3 class="text-lg font-bold text-slate-900 mb-1">Supervisor Sign-In Required</h3>
+            <p class="text-xs text-slate-500 mb-4">Enter your Supabase credentials to sign off queue items under HPCSA audit compliance.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Email Address</label>
+                    <input type="email" id="login-email" value="sdumke05@gmail.com" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div id="login-error" class="text-xs text-rose-600 hidden"></div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button onclick="closeLoginModal()" class="px-4 py-2 text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 transition">Cancel</button>
+                    <button onclick="handleLogin()" class="px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-sm">Sign In</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script Logic -->
+    <script>
+        // Supabase Configuration (Linked to your project)
+        const SUPABASE_URL = 'https://wuwlembjnmhfilbssfco.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1d2xlbWJqbm1oZmlsYnNzZmNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4ODYzNjMsImV4cCI6MjEwODQ2MjM2M30._iDAq_n2cGITw4_arUTi2Iw9CpzRiV5S-Gr-6xY9iXs';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentCategory = 'SICK_NOTE';
+        let currentStatus = 'PENDING';
+        let currentUser = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkAuthSession();
+            loadQueue();
+        });
+
+        async function checkAuthSession() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            currentUser = session?.user || null;
+            renderAuthHeader();
+        }
+
+        function renderAuthHeader() {
+            const container = document.getElementById('auth-container');
+            if (currentUser) {
+                container.innerHTML = `
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Supervisor Mode: Active (${currentUser.email})
+                    </span>
+                    <button onclick="handleLogout()" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Logout</button>
+                `;
+            } else {
+                container.innerHTML = `
+                    <button onclick="openLoginModal()" class="px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-sm">
+                        Supervisor Login
+                    </button>
+                `;
+            }
+        }
+
+        function openLoginModal() { document.getElementById('login-modal').classList.remove('hidden'); }
+        function closeLoginModal() { document.getElementById('login-modal').classList.add('hidden'); }
+
+        async function handleLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const errDiv = document.getElementById('login-error');
+
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) {
+                errDiv.textContent = error.message;
+                errDiv.classList.remove('hidden');
+            } else {
+                currentUser = data.user;
+                closeLoginModal();
+                renderAuthHeader();
+                loadQueue();
+            }
+        }
+
+        async function handleLogout() {
+            await supabaseClient.auth.signOut();
+            currentUser = null;
+            renderAuthHeader();
+            loadQueue();
+        }
+
+        function switchTab(category) {
+            currentCategory = category;
+            ['SICK_NOTE', 'SCRIPT', 'REFERRAL'].forEach(cat => {
+                const btn = document.getElementById(`tab-${cat}`);
+                if (cat === category) {
+                    btn.className = "px-4 py-2 font-medium text-sm rounded-lg bg-emerald-600 text-white transition shadow-sm";
+                } else {
+                    btn.className = "px-4 py-2 font-medium text-sm rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition";
+                }
+            });
+            loadQueue();
+        }
+
+        function switchStatus(status) {
+            currentStatus = status;
+            ['PENDING', 'APPROVED'].forEach(st => {
+                const btn = document.getElementById(`status-${st}`);
+                if (st === status) {
+                    btn.className = st === 'PENDING' ? "px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-100 text-amber-800 border border-amber-200 transition" : "px-3 py-1.5 text-xs font-semibold rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 transition";
+                } else {
+                    btn.className = "px-3 py-1.5 text-xs font-semibold rounded-md bg-slate-100 text-slate-600 border border-slate-200 transition";
+                }
+            });
+            loadQueue();
+        }
+
+        async function loadQueue() {
+            const { data, error } = await supabaseClient
+                .from('queue_items')
+                .select('*, consultations(*, patients(*))')
+                .eq('category', currentCategory)
+                .eq('status', currentStatus)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error("Error loading queue:", error);
+                return;
+            }
+
+            fetchAllCounts();
+
+            const tbody = document.getElementById('queue-table-body');
+            if (!data || data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400 text-sm">No items found in this category.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = data.map(item => {
+                const patient = item.consultations?.patients || {};
+                const consult = item.consultations || {};
+                const timeStr = new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                return `
+                    <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-0">
+                        <td class="py-3 px-4 text-xs text-slate-600 whitespace-nowrap">${timeStr}</td>
+                        <td class="py-3 px-4">
+                            <div class="font-medium text-slate-900">${patient.full_name || 'Patient Record'}</div>
+                            <div class="text-xs text-slate-500">ID: ${patient.id_number || 'N/A'}</div>
+                        </td>
+                        <td class="py-3 px-4">
+                            <div class="font-medium text-slate-900">${consult.diagnosis || 'N/A'}</div>
+                            <div class="text-xs text-slate-500">${consult.icd10_code || ''}</div>
+                        </td>
+                        <td class="py-3 px-4 text-xs text-slate-600 font-mono max-w-xs truncate">
+                            ${JSON.stringify(item.details)}
+                        </td>
+                        <td class="py-3 px-4 text-right">
+                            ${currentStatus === 'PENDING' ? `
+                                <button onclick="approveItem('${item.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-sm">
+                                    ✍️ Review & Sign
+                                </button>
+                            ` : `
+                                <button onclick='handleExportPDF(${JSON.stringify(item)})' class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition shadow-sm">
+                                    🖨️ Export PDF
+                                </button>
+                            `}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function fetchAllCounts() {
+            for (const cat of ['SICK_NOTE', 'SCRIPT', 'REFERRAL']) {
+                const { count } = await supabaseClient
+                    .from('queue_items')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('category', cat)
+                    .eq('status', currentStatus);
+                document.getElementById(`count-${cat}`).textContent = count || 0;
+            }
+        }
+
+        async function approveItem(itemId) {
+            if (!currentUser) {
+                openLoginModal();
+                return;
+            }
+
+            const { error } = await supabaseClient
+                .from('queue_items')
+                .update({ 
+                    status: 'APPROVED', 
+                    signed_by: currentUser.email,
+                    signed_at: new Date().toISOString()
+                })
+                .eq('id', itemId);
+
+            if (error) {
+                alert('Approval failed: ' + error.message);
+            } else {
+                loadQueue();
+            }
+        }
+
+        // --- PDF EXPORT ROUTER & TEMPLATES ---
+        function handleExportPDF(item) {
+            if (item.category === 'SICK_NOTE') {
+                generateMedicalCertificate(item);
+            } else if (item.category === 'SCRIPT') {
+                generatePrescriptionPDF(item);
+            } else if (item.category === 'REFERRAL') {
+                generateReferralPDF(item);
+            }
+        }
+
+        function generateMedicalCertificate(item) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const patient = item.consultations?.patients || {};
+            const consult = item.consultations || {};
+            const details = item.details || {};
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+            doc.text("DR. DUMKE PRACTICE MANAGEMENT SYSTEM", 14, 20);
+            doc.setFontSize(10); doc.setFont("helvetica", "normal");
+            doc.text("HPCSA Compliant Clinical Associate & Supervision Portal", 14, 26);
+            doc.setLineWidth(0.5); doc.line(14, 30, 196, 30);
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+            doc.text("MEDICAL CERTIFICATE (SICK NOTE)", 14, 40);
+
+            doc.setFontSize(10); doc.setFont("helvetica", "normal");
+            doc.text(`Patient Name: ${patient.full_name || 'N/A'}`, 14, 50);
+            doc.text(`ID Number: ${patient.id_number || 'N/A'}`, 14, 56);
+            doc.text(`Date of Examination: ${new Date(item.created_at).toLocaleDateString()}`, 14, 62);
+            doc.text(`Diagnosis: ${consult.diagnosis || 'N/A'} (${consult.icd10_code || ''})`, 14, 68);
+
+            doc.line(14, 75, 196, 75);
+            doc.setFont("helvetica", "bold"); doc.text("Certified Sick Leave Details:", 14, 85);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Duration: ${details.days_off || 1} Day(s)`, 14, 93);
+            doc.text(`Restrictions: ${details.duty_restrictions || 'None'}`, 14, 101);
+
+            doc.setFont("helvetica", "bold"); doc.text("SUPERVISOR COUNTERSIGNATURE (HPCSA COMPLIANT):", 14, 135);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Status: APPROVED`, 14, 143);
+            doc.text(`Verified & Countersigned under Supabase Auth Session`, 14, 149);
+            doc.text(`Signed By: ${item.signed_by || 'Authenticated Supervisor'}`, 14, 155);
+            doc.text(`Timestamp: ${item.signed_at ? new Date(item.signed_at).toLocaleString() : 'N/A'}`, 14, 161);
+
+            doc.setFontSize(8); doc.setTextColor(100);
+            doc.text("Generated electronically via Open-Source Medical Practice Management System.", 14, 185);
+
+            doc.save(`SickNote_${patient.full_name || 'Patient'}.pdf`);
+        }
+
+        function generatePrescriptionPDF(item) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const patient = item.consultations?.patients || {};
+            const consult = item.consultations || {};
+            const details = item.details || {};
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+            doc.text("DR. DUMKE PRACTICE MANAGEMENT SYSTEM", 14, 20);
+            doc.setFontSize(10); doc.setFont("helvetica", "normal");
+            doc.text("HPCSA Compliant Clinical Associate & Supervision Portal", 14, 26);
+            doc.setLineWidth(0.5); doc.line(14, 30, 196, 30);
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+            doc.text("PRESCRIPTION (SCRIPT)", 14, 40);
+
+            doc.setFontSize(10); doc.setFont("helvetica", "normal");
+            doc.text(`Patient Name: ${patient.full_name || 'N/A'}`, 14, 50);
+            doc.text(`ID Number: ${patient.id_number || 'N/A'}`, 14, 56);
+            doc.text(`Date: ${new Date(item.created_at).toLocaleDateString()}`, 14, 62);
+            doc.text(`Diagnosis: ${consult.diagnosis || 'N/A'} (${consult.icd10_code || ''})`, 14, 68);
+
+            doc.line(14, 75, 196, 75);
+            doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+            doc.text("R/", 14, 88);
+            
+            doc.setFont("helvetica", "normal"); doc.setFontSize(11);
+            doc.text(details.medication_name || consult.treatment_plan || 'Standard Prescription Medication', 26, 88);
+            doc.text(`Instructions: ${details.instructions || 'Take as directed.'}`, 26, 96);
+            doc.text(`Quantity: ${details.quantity || 'As prescribed'} | Repeats: ${details.repeats || '0'}`, 26, 104);
+
+            doc.setFontSize(10); doc.setFont("helvetica", "bold");
+            doc.text("SUPERVISOR COUNTERSIGNATURE (HPCSA COMPLIANT):", 14, 135);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Status: APPROVED`, 14, 143);
+            doc.text(`Verified & Countersigned under Supabase Auth Session`, 14, 149);
+            doc.text(`Signed By: ${item.signed_by || 'Authenticated Supervisor'}`, 14, 155);
+            doc.text(`Timestamp: ${item.signed_at ? new Date(item.signed_at).toLocaleString() : 'N/A'}`, 14, 161);
+
+            doc.setFontSize(8); doc.setTextColor(100);
+            doc.text("Generated electronically via Open-Source Medical Practice Management System.", 14, 185);
+
+            doc.save(`Prescription_${patient.full_name || 'Patient'}.pdf`);
+        }
+
+        function generateReferralPDF(item) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const patient = item.consultations?.patients || {};
+            const consult = item.consultations || {};
+            const details = item.details || {};
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+            doc.text("DR. DUMKE PRACTICE MANAGEMENT SYSTEM", 14, 20);
+            doc.setFontSize(10); doc.setFont("helvetica", "normal");
+            doc.text("HPCSA Compliant Clinical Associate & Supervision Portal", 14, 26);
+            doc.setLineWidth(0.5); doc.line(14, 30, 196, 30);
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+            doc.text("MEDICAL REFERRAL LETTER", 14, 40);
+
+            doc.setFontSize(10); doc.setFont("helvetica", "normal");
+            doc.text(`Patient Name: ${patient.full_name || 'N/A'}`, 14, 50);
+            doc.text(`ID Number: ${patient.id_number || 'N/A'}`, 14, 56);
+            doc.text(`Date of Referral: ${new Date(item.created_at).toLocaleDateString()}`, 14, 62);
+            doc.text(`Referred To: ${details.referred_to || 'Specialist / Hospital Department'}`, 14, 68);
+
+            doc.line(14, 75, 196, 75);
+            doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+            doc.text("Clinical Summary & Reason for Referral:", 14, 85);
+            
+            doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+            doc.text(`Diagnosis: ${consult.diagnosis || 'N/A'} (${consult.icd10_code || ''})`, 14, 93);
+            
+            const summaryText = doc.splitTextToSize(`Clinical Notes: ${consult.clinical_info || details.reason || 'Specialized management requested.'}`, 180);
+            doc.text(summaryText, 14, 101);
+
+            doc.setFontSize(10); doc.setFont("helvetica", "bold");
+            doc.text("SUPERVISOR COUNTERSIGNATURE (HPCSA COMPLIANT):", 14, 145);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Status: APPROVED`, 14, 153);
+            doc.text(`Verified & Countersigned under Supabase Auth Session`, 14, 159);
+            doc.text(`Signed By: ${item.signed_by || 'Authenticated Supervisor'}`, 14, 165);
+            doc.text(`Timestamp: ${item.signed_at ? new Date(item.signed_at).toLocaleString() : 'N/A'}`, 14, 171);
+
+            doc.setFontSize(8); doc.setTextColor(100);
+            doc.text("Generated electronically via Open-Source Medical Practice Management System.", 14, 190);
+
+            doc.save(`Referral_${patient.full_name || 'Patient'}.pdf`);
+        }
+    </script>
+</body>
+</html>
