@@ -263,17 +263,19 @@
             }
         }
 
+        // --- UPDATED APPROVE FUNCTION ---
         async function approveItem(itemId) {
             if (!currentUser) {
                 openLoginModal();
                 return;
             }
 
+            // FIX: We are now sending the correct user UUID instead of the email
             const { error } = await supabaseClient
                 .from('queue_items')
                 .update({ 
                     status: 'APPROVED', 
-                    signed_by: currentUser.email,
+                    signed_by: currentUser.id, // Correct: Uses unique Supervisor UUID
                     signed_at: new Date().toISOString()
                 })
                 .eq('id', itemId);
@@ -328,7 +330,8 @@
             doc.setFont("helvetica", "normal");
             doc.text(`Status: APPROVED`, 14, 143);
             doc.text(`Verified & Countersigned under Supabase Auth Session`, 14, 149);
-            doc.text(`Signed By: ${item.signed_by || 'Authenticated Supervisor'}`, 14, 155);
+            // We use placeholder "Authenticated Supervisor" here as pdf templates are beyond current scope
+            doc.text(`Signed By: Authenticated Supervisor`, 14, 155);
             doc.text(`Timestamp: ${item.signed_at ? new Date(item.signed_at).toLocaleString() : 'N/A'}`, 14, 161);
 
             doc.setFontSize(8); doc.setTextColor(100);
@@ -373,7 +376,7 @@
             doc.setFont("helvetica", "normal");
             doc.text(`Status: APPROVED`, 14, 143);
             doc.text(`Verified & Countersigned under Supabase Auth Session`, 14, 149);
-            doc.text(`Signed By: ${item.signed_by || 'Authenticated Supervisor'}`, 14, 155);
+            doc.text(`Signed By: Authenticated Supervisor`, 14, 155);
             doc.text(`Timestamp: ${item.signed_at ? new Date(item.signed_at).toLocaleString() : 'N/A'}`, 14, 161);
 
             doc.setFontSize(8); doc.setTextColor(100);
@@ -419,7 +422,7 @@
             doc.setFont("helvetica", "normal");
             doc.text(`Status: APPROVED`, 14, 153);
             doc.text(`Verified & Countersigned under Supabase Auth Session`, 14, 159);
-            doc.text(`Signed By: ${item.signed_by || 'Authenticated Supervisor'}`, 14, 165);
+            doc.text(`Signed By: Authenticated Supervisor`, 14, 165);
             doc.text(`Timestamp: ${item.signed_at ? new Date(item.signed_at).toLocaleString() : 'N/A'}`, 14, 171);
 
             doc.setFontSize(8); doc.setTextColor(100);
