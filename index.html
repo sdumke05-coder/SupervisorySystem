@@ -403,10 +403,10 @@
                     detailsPayload.reason = document.getElementById('ref-reason').value;
                 }
 
-                // 1. Insert or retrieve Patient record
+                // 1. Insert or retrieve Patient record cleanly using upsert on id_number
                 const { data: ptData, error: ptError } = await supabaseClient
                     .from('patients')
-                    .insert([{ full_name: fullName, id_number: idNumber }])
+                    .upsert([{ full_name: fullName, id_number: idNumber }], { onConflict: 'id_number' })
                     .select()
                     .single();
 
